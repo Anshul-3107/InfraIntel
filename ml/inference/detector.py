@@ -6,14 +6,18 @@ Runs two YOLOv8 models on an image and returns merged, structured detections:
   - crack model    -> longitudinal / transverse / alligator cracks
                       (its own pothole predictions are discarded)
 
-Usage from the terminal:
-    python detector.py --image "path\\to\\photo.jpg"
-    python detector.py --image "path\\to\\photo.jpg" --save_annotated out.jpg
+Optional de-duplication:
+  - nms_iou: lower value merges more overlapping boxes within a class
+  - filter_contained_cracks: drops a lower-confidence crack box that lies mostly
+    inside a higher-confidence crack box of a different class
 
-Usage from other code (e.g. a Django app later):
-    from detector import DamageDetector
-    detector = DamageDetector()
-    result = detector.detect("photo.jpg")
+Usage from the terminal (from the project root):
+    python -m ml.inference.detector --image "path/to/photo.jpg"
+    python -m ml.inference.detector --image photo.jpg --save_annotated out.jpg
+
+Usage from other code:
+    from ml.inference.detector import DamageDetector
+    result = DamageDetector().detect("photo.jpg")
 """
 
 import argparse
@@ -22,34 +26,42 @@ from pathlib import Path
 
 from ultralytics import YOLO
 
-MODELS_DIR = Path(r"D:\InfraIntel\ml\models\production")
-POTHOLE_WEIGHTS = MODELS_DIR / "pothole_v1.pt"
-CRACK_WEIGHTS = MODELS_DIR / "crack_v1.pt"
+from ml import config
 
-CONF_THRESHOLD = 0.25
-IMG_SIZE = 672  # matches training resolution
 
-# Class names as defined in the crack model's data.yaml, in index order
-CRACK_CLASS_NAMES = {
-    0: "longitudinal_crack",
-    1: "transverse_crack",
-    2: "alligator_crack",
-    3: "pothole",  # ignored; pothole model is used for this class instead
-}
+def _box_area(b):
+    return max(0.0, b[2] - b[0]) * max(0.0, b[3] - b[1])
+
+
+def _intersection_area(a, b):
+    x1, y1 = max(a[0], b[0]), max(a[1], b[1])
+    x2, y2 = min(a[2], b[2]), min(a[3], b[3])
+    return max(0.0, x2 - x1) * max(0.0, y2 - y1)
 
 
 class DamageDetector:
-    def __init__(self, conf_threshold: float = CONF_THRESHOLD, device=0):
+    def __init__(
+        self,
+        conf_threshold: float = config.CONF_THRESHOLD,
+        nms_iou: float = config.NMS_IOU,
+        filter_contained_cracks: bool = True,
+        containment_threshold: float = config.CONTAINMENT_THRESHOLD,
+        device=0,
+    ):
         self.conf_threshold = conf_threshold
+        self.nms_iou = nms_iou
+        self.filter_contained_cracks = filter_contained_cracks
+        self.containment_threshold = containment_threshold
         self.device = device
-        self.pothole_model = YOLO(str(POTHOLE_WEIGHTS))
-        self.crack_model = YOLO(str(CRACK_WEIGHTS))
+        self.pothole_model = YOLO(str(config.POTHOLE_WEIGHTS))
+        self.crack_model = YOLO(str(config.CRACK_WEIGHTS))
 
     def _run(self, model, image_path: str):
         return model.predict(
             source=image_path,
             conf=self.conf_threshold,
-            imgsz=IMG_SIZE,
+            iou=self.nms_iou,
+            imgsz=config.IMG_SIZE,
             device=self.device,
             verbose=False,
         )[0]
@@ -64,14 +76,19 @@ class DamageDetector:
             detections.append(self._to_dict(box, "pothole", "pothole_model"))
 
         # 2) Cracks from the crack model, skipping its pothole class
+        crack_dets = []
         crack_result = self._run(self.crack_model, image_path)
         for box in crack_result.boxes:
             class_id = int(box.cls[0])
-            if class_id == 3:
+            if class_id == config.POTHOLE_CLASS_ID_IN_CRACK_MODEL:
                 continue
-            name = CRACK_CLASS_NAMES.get(class_id, f"class_{class_id}")
-            detections.append(self._to_dict(box, name, "crack_model"))
+            name = config.CRACK_CLASS_NAMES.get(class_id, f"class_{class_id}")
+            crack_dets.append(self._to_dict(box, name, "crack_model"))
 
+        if self.filter_contained_cracks:
+            crack_dets = self._drop_contained_cross_class(crack_dets)
+
+        detections.extend(crack_dets)
         detections.sort(key=lambda d: d["confidence"], reverse=True)
 
         height, width = pothole_result.orig_shape
@@ -79,10 +96,31 @@ class DamageDetector:
             "image": Path(image_path).name,
             "image_size": {"width": int(width), "height": int(height)},
             "conf_threshold": self.conf_threshold,
+            "nms_iou": self.nms_iou,
             "num_detections": len(detections),
             "counts": self._count_by_type(detections),
             "detections": detections,
         }
+
+    def _drop_contained_cross_class(self, dets: list) -> list:
+        """Drop a box mostly inside a higher-confidence box of a different class."""
+        ordered = sorted(dets, key=lambda d: d["confidence"], reverse=True)
+        kept = []
+        for cand in ordered:
+            area = _box_area(cand["bounding_box"])
+            contained = False
+            for keeper in kept:
+                if keeper["damage_type"] == cand["damage_type"]:
+                    continue
+                if area > 0 and (
+                    _intersection_area(cand["bounding_box"], keeper["bounding_box"]) / area
+                    >= self.containment_threshold
+                ):
+                    contained = True
+                    break
+            if not contained:
+                kept.append(cand)
+        return kept
 
     @staticmethod
     def _to_dict(box, damage_type: str, source_model: str) -> dict:
@@ -90,7 +128,7 @@ class DamageDetector:
         return {
             "damage_type": damage_type,
             "confidence": round(float(box.conf[0]), 3),
-            "bounding_box": [x1, y1, x2, y2],  # pixel coords: xmin, ymin, xmax, ymax
+            "bounding_box": [x1, y1, x2, y2],  # pixels: xmin, ymin, xmax, ymax
             "source_model": source_model,
         }
 
@@ -101,21 +139,15 @@ class DamageDetector:
             counts[d["damage_type"]] = counts.get(d["damage_type"], 0) + 1
         return counts
 
-    def save_annotated(self, image_path: str, out_path: str):
+    def save_annotated(self, image_path: str, out_path: str) -> dict:
         """Draw all merged detections on the image and save it."""
         import cv2
 
         result = self.detect(image_path)
         img = cv2.imread(str(image_path))
-        colors = {
-            "pothole": (0, 0, 255),
-            "longitudinal_crack": (0, 255, 255),
-            "transverse_crack": (255, 0, 255),
-            "alligator_crack": (0, 165, 255),
-        }
         for d in result["detections"]:
             x1, y1, x2, y2 = map(int, d["bounding_box"])
-            color = colors.get(d["damage_type"], (255, 255, 255))
+            color = config.DAMAGE_COLORS.get(d["damage_type"], (255, 255, 255))
             cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
             label = f'{d["damage_type"]} {d["confidence"]:.2f}'
             cv2.putText(img, label, (x1, max(y1 - 6, 12)),
@@ -127,17 +159,22 @@ class DamageDetector:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--image", required=True)
-    parser.add_argument("--save_annotated", default=None, help="Optional path to save an annotated copy")
-    parser.add_argument("--conf", type=float, default=CONF_THRESHOLD)
+    parser.add_argument("--save_annotated", default=None)
+    parser.add_argument("--conf", type=float, default=config.CONF_THRESHOLD)
+    parser.add_argument("--nms_iou", type=float, default=config.NMS_IOU)
+    parser.add_argument("--no_containment_filter", action="store_true")
     args = parser.parse_args()
 
-    detector = DamageDetector(conf_threshold=args.conf)
+    detector = DamageDetector(
+        conf_threshold=args.conf,
+        nms_iou=args.nms_iou,
+        filter_contained_cracks=not args.no_containment_filter,
+    )
     if args.save_annotated:
         result = detector.save_annotated(args.image, args.save_annotated)
         print(f"Annotated image saved to {args.save_annotated}")
     else:
         result = detector.detect(args.image)
-
     print(json.dumps(result, indent=2))
 
 

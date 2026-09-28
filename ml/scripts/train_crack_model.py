@@ -7,14 +7,23 @@ same approach that worked well for the pothole model: full epoch budget
 from the start, generous patience, distinct run name.
 """
 
+import sys
+from pathlib import Path
 from ultralytics import YOLO
 
-DATA_YAML = r"D:\InfraIntel\ml\datasets\rdd2022_india_split\data.yaml"
+# Ensure project root is in sys.path if run directly
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from ml import config
+
+DATA_YAML = str(config.DATASETS_DIR / "rdd2022_india_split" / "data.yaml")
 MODEL_ARCH = "yolov8s.pt"
 EPOCHS = 100
-IMG_SIZE = 672
+IMG_SIZE = config.IMG_SIZE
 BATCH = 16
-PROJECT_DIR = r"D:\InfraIntel\ml\models"
+PROJECT_DIR = str(config.ML_DIR / "models")
 RUN_NAME = "crack_v3_japan_czech"
 
 
