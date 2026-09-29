@@ -1,6 +1,8 @@
 from django.conf import settings
 from rest_framework import serializers
 
+from .models import Inspection
+
 
 class InspectionRequestSerializer(serializers.Serializer):
     image = serializers.ImageField()
@@ -12,3 +14,24 @@ class InspectionRequestSerializer(serializers.Serializer):
             limit_mb = settings.MAX_UPLOAD_BYTES // (1024 * 1024)
             raise serializers.ValidationError(f"Image must be under {limit_mb} MB.")
         return image
+
+
+class InspectionSerializer(serializers.ModelSerializer):
+    num_detections = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Inspection
+        fields = [
+            "id",
+            "image",
+            "latitude",
+            "longitude",
+            "image_width",
+            "image_height",
+            "num_detections",
+            "detections",
+            "created_at",
+        ]
+
+    def get_num_detections(self, inspection):
+        return len(inspection.detections)
