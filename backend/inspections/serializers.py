@@ -1,6 +1,8 @@
 from django.conf import settings
 from rest_framework import serializers
 
+from ml.risk.severity import assess
+
 from .models import Inspection
 
 
@@ -18,6 +20,7 @@ class InspectionRequestSerializer(serializers.Serializer):
 
 class InspectionSerializer(serializers.ModelSerializer):
     num_detections = serializers.SerializerMethodField()
+    assessment = serializers.SerializerMethodField()
 
     class Meta:
         model = Inspection
@@ -29,9 +32,17 @@ class InspectionSerializer(serializers.ModelSerializer):
             "image_width",
             "image_height",
             "num_detections",
+            "assessment",
             "detections",
             "created_at",
         ]
 
     def get_num_detections(self, inspection):
         return len(inspection.detections)
+
+    def get_assessment(self, inspection):
+        return assess(
+            inspection.detections,
+            inspection.image_width,
+            inspection.image_height,
+        )
