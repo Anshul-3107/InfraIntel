@@ -6,8 +6,11 @@ from django.conf import settings
 from rest_framework import status
 from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.parsers import MultiPartParser
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
+from rest_framework_simplejwt.views import TokenObtainPairView
 
 from .detector_service import run_detection
 from .geo import find_nearest
@@ -21,8 +24,35 @@ from .serializers import (
 logger = logging.getLogger(__name__)
 
 
+def visible_inspections(user):
+    """Staff see every inspection; inspectors see only their own."""
+    qs = Inspection.objects.select_related("infrastructure", "inspector")
+    return qs if user.is_staff else qs.filter(inspector=user)
+
+
+class ThrottledTokenObtainPairView(TokenObtainPairView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "login"
+
+
+class MeView(APIView):
+    def get(self, request):
+        user = request.user
+        return Response(
+            {
+                "id": user.id,
+                "username": user.username,
+                "role": "staff" if user.is_staff else "inspector",
+            }
+        )
+
+
 class InspectView(APIView):
     parser_classes = [MultiPartParser]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "inspect"
 
     def post(self, request):
         request_serializer = InspectionRequestSerializer(data=request.data)
@@ -59,6 +89,7 @@ class InspectView(APIView):
                 )
 
         inspection = Inspection.objects.create(
+            inspector=request.user,
             infrastructure=asset,
             image=image,
             latitude=lat,
@@ -68,20 +99,24 @@ class InspectView(APIView):
             detections=result["detections"],
         )
 
-        response_serializer = InspectionSerializer(inspection, context={"request": request})
+        response_serializer = InspectionSerializer(
+            inspection, context={"request": request}
+        )
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
 
 class InspectionDetailView(RetrieveAPIView):
-    queryset = Inspection.objects.select_related("infrastructure")
     serializer_class = InspectionSerializer
+
+    def get_queryset(self):
+        return visible_inspections(self.request.user)
 
 
 class InspectionListView(ListAPIView):
     serializer_class = InspectionSerializer
 
     def get_queryset(self):
-        qs = Inspection.objects.select_related("infrastructure")
+        qs = visible_inspections(self.request.user)
         asset_id = self.request.query_params.get("infrastructure")
         if asset_id and asset_id.isdigit():
             qs = qs.filter(infrastructure_id=int(asset_id))

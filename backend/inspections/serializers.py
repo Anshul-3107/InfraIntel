@@ -28,6 +28,7 @@ class InspectionRequestSerializer(serializers.Serializer):
 class InspectionSerializer(serializers.ModelSerializer):
     num_detections = serializers.SerializerMethodField()
     assessment = serializers.SerializerMethodField()
+    inspector = serializers.SerializerMethodField()
     infrastructure = serializers.SerializerMethodField()
     asset_health = serializers.SerializerMethodField()
 
@@ -35,6 +36,7 @@ class InspectionSerializer(serializers.ModelSerializer):
         model = Inspection
         fields = [
             "id",
+            "inspector",
             "image",
             "latitude",
             "longitude",
@@ -52,7 +54,12 @@ class InspectionSerializer(serializers.ModelSerializer):
         return len(inspection.detections)
 
     def get_assessment(self, inspection):
-        return assess(inspection.detections, inspection.image_width, inspection.image_height)
+        return assess(
+            inspection.detections, inspection.image_width, inspection.image_height
+        )
+
+    def get_inspector(self, inspection):
+        return inspection.inspector.username if inspection.inspector else None
 
     def get_infrastructure(self, inspection):
         asset = inspection.infrastructure
@@ -92,10 +99,12 @@ class InfrastructureSerializer(serializers.ModelSerializer):
         rows = []
         for i in asset.inspections.order_by("-created_at")[:5]:
             a = assess(i.detections, i.image_width, i.image_height)
-            rows.append({
-                "id": i.id,
-                "created_at": i.created_at,
-                "severity_score": a["severity_score"],
-                "priority": a["priority"],
-            })
+            rows.append(
+                {
+                    "id": i.id,
+                    "created_at": i.created_at,
+                    "severity_score": a["severity_score"],
+                    "priority": a["priority"],
+                }
+            )
         return rows

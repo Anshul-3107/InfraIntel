@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 
@@ -26,6 +27,13 @@ class Infrastructure(models.Model):
 
 
 class Inspection(models.Model):
+    inspector = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="inspections",
+    )
     infrastructure = models.ForeignKey(
         Infrastructure,
         null=True,
