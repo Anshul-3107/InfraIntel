@@ -136,3 +136,11 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB cap on inspection images
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
+# Inspections within this distance of an existing asset are linked to it
+ASSET_MATCH_RADIUS_M = 50
+
+REST_FRAMEWORK = {
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 20,
+}

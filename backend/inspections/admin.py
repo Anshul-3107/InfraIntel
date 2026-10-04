@@ -1,3 +1,6 @@
 from django.contrib import admin
 
-# Register your models here.
+from .models import Infrastructure, Inspection
+
+admin.site.register(Infrastructure)
+admin.site.register(Inspection)
