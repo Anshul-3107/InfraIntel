@@ -1,0 +1,273 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:image_picker/image_picker.dart';
+
+import '../api_client.dart';
+import '../providers.dart';
+import 'result_screen.dart';
+
+class HomeScreen extends ConsumerStatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  final _picker = ImagePicker();
+  File? _file;
+  Position? _position;
+  String? _locationError;
+  bool _locating = false;
+  bool _uploading = false;
+
+  Future<void> _pick(ImageSource source) async {
+    final picked = await _picker.pickImage(
+      source: source,
+      imageQuality: 85,
+      maxWidth: 1920,
+      maxHeight: 1920,
+    );
+    if (picked == null) return;
+    setState(() {
+      _file = File(picked.path);
+      _position = null;
+      _locationError = null;
+    });
+    await _locate();
+  }
+
+  Future<Position> _currentPosition() async {
+    if (!await Geolocator.isLocationServiceEnabled()) {
+      throw Exception('Location services are turned off.');
+    }
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      throw Exception('Location permission is required to record the inspection.');
+    }
+    return Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        timeLimit: Duration(seconds: 20),
+      ),
+    );
+  }
+
+  Future<void> _locate() async {
+    setState(() {
+      _locating = true;
+      _locationError = null;
+    });
+    try {
+      final pos = await _currentPosition();
+      if (mounted) setState(() => _position = pos);
+    } on TimeoutException {
+      if (mounted) {
+        setState(() => _locationError = 'Could not get a GPS fix in time.');
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() =>
+            _locationError = e.toString().replaceFirst('Exception: ', ''));
+      }
+    } finally {
+      if (mounted) setState(() => _locating = false);
+    }
+  }
+
+  Future<void> _analyze() async {
+    final file = _file;
+    final pos = _position;
+    if (file == null || pos == null) return;
+
+    setState(() => _uploading = true);
+    try {
+      final inspection = await ref.read(apiProvider).uploadInspection(
+            imagePath: file.path,
+            latitude: pos.latitude,
+            longitude: pos.longitude,
+          );
+      if (!mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ResultScreen(imageFile: file, inspection: inspection),
+        ),
+      );
+    } on ApiException catch (e) {
+      if (e.statusCode == 401) {
+        await ref.read(authProvider.notifier).logout();
+        return;
+      }
+      _snack(e.message);
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  void _snack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final username = ref.watch(authProvider).value;
+    final canAnalyze = _file != null && _position != null && !_uploading;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('New inspection'),
+        actions: [
+          if (username != null)
+            Center(child: Text(username, style: theme.textTheme.bodyMedium)),
+          IconButton(
+            tooltip: 'Sign out',
+            icon: const Icon(Icons.logout),
+            onPressed: _uploading
+                ? null
+                : () => ref.read(authProvider.notifier).logout(),
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    color: theme.colorScheme.surfaceContainerHighest,
+                    child: _file == null
+                        ? const Center(
+                            child: Text('Take or choose a photo of the road'),
+                          )
+                        : Image.file(_file!, fit: BoxFit.contain),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              _LocationRow(
+                locating: _locating,
+                position: _position,
+                error: _locationError,
+                hasPhoto: _file != null,
+                onRetry: _locate,
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed:
+                          _uploading ? null : () => _pick(ImageSource.camera),
+                      icon: const Icon(Icons.photo_camera),
+                      label: const Text('Camera'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed:
+                          _uploading ? null : () => _pick(ImageSource.gallery),
+                      icon: const Icon(Icons.photo_library),
+                      label: const Text('Gallery'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: canAnalyze ? _analyze : null,
+                icon: _uploading
+                    ? const SizedBox(
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.analytics),
+                label: Text(_uploading ? 'Analyzing...' : 'Analyze'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LocationRow extends StatelessWidget {
+  const _LocationRow({
+    required this.locating,
+    required this.position,
+    required this.error,
+    required this.hasPhoto,
+    required this.onRetry,
+  });
+
+  final bool locating;
+  final Position? position;
+  final String? error;
+  final bool hasPhoto;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    if (locating) {
+      return const Row(
+        children: [
+          SizedBox(
+              height: 16,
+              width: 16,
+              child: CircularProgressIndicator(strokeWidth: 2)),
+          SizedBox(width: 8),
+          Text('Getting location...'),
+        ],
+      );
+    }
+    if (position != null) {
+      return Row(
+        children: [
+          const Icon(Icons.place, size: 18),
+          const SizedBox(width: 6),
+          Text(
+              '${position!.latitude.toStringAsFixed(5)}, ${position!.longitude.toStringAsFixed(5)}'),
+          const Spacer(),
+          TextButton(onPressed: onRetry, child: const Text('Refresh')),
+        ],
+      );
+    }
+    if (error != null) {
+      return Row(
+        children: [
+          Icon(Icons.location_off, size: 18, color: theme.colorScheme.error),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(error!, style: TextStyle(color: theme.colorScheme.error)),
+          ),
+          TextButton(onPressed: onRetry, child: const Text('Retry')),
+        ],
+      );
+    }
+    return Text(
+      hasPhoto
+          ? 'Location not captured yet.'
+          : 'Location is recorded when you pick a photo.',
+      style: theme.textTheme.bodySmall,
+    );
+  }
+}
