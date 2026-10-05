@@ -3,8 +3,13 @@ import tempfile
 from pathlib import Path
 
 from django.conf import settings
+from django.db import transaction
 from rest_framework import status
-from rest_framework.generics import ListAPIView, RetrieveAPIView
+from rest_framework.generics import (
+    ListAPIView,
+    RetrieveAPIView,
+    RetrieveDestroyAPIView,
+)
 from rest_framework.parsers import MultiPartParser
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -105,11 +110,39 @@ class InspectView(APIView):
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
 
-class InspectionDetailView(RetrieveAPIView):
+class InspectionDetailView(RetrieveDestroyAPIView):
+    """GET one inspection, or DELETE it (owner or staff only).
+
+    The queryset is limited to what the user may see, so deleting someone
+    else's inspection returns 404 and does not reveal that it exists.
+    """
+
     serializer_class = InspectionSerializer
 
     def get_queryset(self):
         return visible_inspections(self.request.user)
+
+    def perform_destroy(self, instance):
+        asset = instance.infrastructure
+        image = instance.image
+
+        with transaction.atomic():
+            instance.delete()
+            # An asset that was created automatically and has no inspections
+            # left would only be an empty pin on the map, so remove it.
+            # Assets someone named or curated are always kept.
+            if (
+                asset is not None
+                and asset.auto_created
+                and not asset.inspections.exists()
+            ):
+                asset.delete()
+
+        # Remove the stored photo. A failure here must not undo the delete.
+        try:
+            image.delete(save=False)
+        except Exception:
+            logger.exception("Could not remove image file for deleted inspection")
 
 
 class InspectionListView(ListAPIView):

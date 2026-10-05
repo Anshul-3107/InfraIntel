@@ -135,6 +135,40 @@ class ApiClient {
     return Inspection.fromJson(res.data as Map<String, dynamic>);
   }
 
+  /// Permanently deletes an inspection and its photo on the server.
+  /// Throws [ApiException] with statusCode 404 if it no longer exists
+  /// or belongs to someone else.
+  Future<void> deleteInspection(int id) async {
+    await _authed((o) => _dio.delete('/inspections/$id/', options: o));
+  }
+
+  /// Newest first. Fetches up to [maxPages] pages of 20.
+  Future<List<Inspection>> listInspections({int maxPages = 3}) async {
+    final rows = await _getAllPages('/inspections/', maxPages);
+    return rows.map(Inspection.fromJson).toList();
+  }
+
+  Future<List<Asset>> listAssets({int maxPages = 5}) async {
+    final rows = await _getAllPages('/infrastructure/', maxPages);
+    return rows.map(Asset.fromJson).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> _getAllPages(
+    String path,
+    int maxPages,
+  ) async {
+    final results = <Map<String, dynamic>>[];
+    for (var page = 1; page <= maxPages; page++) {
+      final res = await _authed(
+        (o) => _dio.get(path, queryParameters: {'page': page}, options: o),
+      );
+      final data = res.data as Map<String, dynamic>;
+      results.addAll((data['results'] as List).cast<Map<String, dynamic>>());
+      if (data['next'] == null) break;
+    }
+    return results;
+  }
+
   // ---- errors -----------------------------------------------------------
 
   ApiException _toApiException(DioException e) {
@@ -170,6 +204,11 @@ class ApiClient {
         return ApiException(
           'Sign-in failed or your session expired.',
           statusCode: 401,
+        );
+      case 404:
+        return ApiException(
+          'Not found. It may already have been deleted.',
+          statusCode: 404,
         );
       case 429:
         return ApiException(

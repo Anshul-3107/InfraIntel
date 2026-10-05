@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'providers.dart';
-import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/shell_screen.dart';
 
 void main() => runApp(const ProviderScope(child: InfraIntelApp()));
 
@@ -34,7 +34,7 @@ class AuthGate extends ConsumerWidget {
       loading: () =>
           const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (_, _) => const LoginScreen(),
-      data: (user) => user == null ? const LoginScreen() : const HomeScreen(),
+      data: (user) => user == null ? const LoginScreen() : const ShellScreen(),
     );
   }
 }

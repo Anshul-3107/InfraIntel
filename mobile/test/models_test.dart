@@ -6,11 +6,13 @@ void main() {
     final json = {
       'id': 3,
       'inspector': 'inspector1',
+      'image': 'http://127.0.0.1:8000/media/inspections/2026/10/a.jpg',
       'latitude': 23.2599,
       'longitude': 77.4126,
       'image_width': 720,
       'image_height': 720,
       'num_detections': 2,
+      'created_at': '2026-10-04T18:50:12.793199Z',
       'assessment': {
         'version': 'severity-v1',
         'severity_score': 50,
@@ -53,6 +55,54 @@ void main() {
     expect(i.detections.first.box.last, 720.0);
     expect(i.health!.score, 45);
     expect(i.assetId, 1);
+    expect(i.assetLabel, 'Asset #1');
     expect(i.assetAutoCreated, isTrue);
+    expect(i.createdAt.isUtc, isTrue);
+  });
+
+  test('Asset parses with and without health', () {
+    final withHealth = Asset.fromJson({
+      'id': 2,
+      'name': 'Bhopal bypass',
+      'asset_type': 'road',
+      'latitude': 23.26,
+      'longitude': 77.41,
+      'construction_year': 2005,
+      'auto_created': false,
+      'health': {
+        'version': 'health-v1',
+        'health_score': 60,
+        'risk_level': 'MEDIUM',
+        'trend': 'stable',
+        'reasons': ['Latest inspection severity 40/100'],
+        'inspections_considered': 1,
+      },
+      'recent_inspections': [
+        {
+          'id': 9,
+          'created_at': '2026-10-04T18:50:12Z',
+          'severity_score': 40,
+          'priority': 'MEDIUM',
+        },
+      ],
+    });
+    expect(withHealth.label, 'Bhopal bypass');
+    expect(withHealth.constructionYear, 2005);
+    expect(withHealth.health!.riskLevel, 'MEDIUM');
+    expect(withHealth.recent.single.severityScore, 40);
+
+    final noHealth = Asset.fromJson({
+      'id': 3,
+      'name': '',
+      'asset_type': 'road',
+      'latitude': 1.0,
+      'longitude': 2.0,
+      'construction_year': null,
+      'auto_created': true,
+      'health': null,
+      'recent_inspections': [],
+    });
+    expect(noHealth.label, 'Asset #3');
+    expect(noHealth.health, isNull);
   });
 }

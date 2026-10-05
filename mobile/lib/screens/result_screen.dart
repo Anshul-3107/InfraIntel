@@ -1,23 +1,26 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../actions.dart';
 import '../config.dart';
 import '../models.dart';
 import '../style.dart';
+import '../widgets.dart';
 
-class ResultScreen extends StatelessWidget {
+/// Shows one inspection. [image] is a local file right after upload
+/// and the server's copy when opened from History.
+class ResultScreen extends ConsumerWidget {
   const ResultScreen({
     super.key,
-    required this.imageFile,
+    required this.image,
     required this.inspection,
   });
 
-  final File imageFile;
+  final ImageProvider image;
   final Inspection inspection;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final a = inspection.assessment;
     final h = inspection.health;
     final theme = Theme.of(context);
@@ -25,7 +28,20 @@ class ResultScreen extends StatelessWidget {
         .any((d) => d.confidence < kScoringMinConfidence);
 
     return Scaffold(
-      appBar: AppBar(title: Text('Inspection #${inspection.id}')),
+      appBar: AppBar(
+        title: Text('Inspection #${inspection.id}'),
+        actions: [
+          IconButton(
+            tooltip: 'Delete inspection',
+            icon: const Icon(Icons.delete_outline),
+            onPressed: () async {
+              final deleted =
+                  await confirmAndDeleteInspection(context, ref, inspection);
+              if (deleted && context.mounted) Navigator.of(context).pop();
+            },
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -36,7 +52,7 @@ class ResultScreen extends StatelessWidget {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Image.file(imageFile, fit: BoxFit.fill),
+                  Image(image: image, fit: BoxFit.fill),
                   CustomPaint(
                     painter: DetectionPainter(
                       inspection.detections,
@@ -48,16 +64,21 @@ class ResultScreen extends StatelessWidget {
               ),
             ),
           ),
+          const SizedBox(height: 8),
+          Text(
+            '${formatDateTime(inspection.createdAt)} · ${inspection.assetLabel}',
+            style: theme.textTheme.bodySmall,
+          ),
           if (hasFaded)
             Padding(
-              padding: const EdgeInsets.only(top: 6),
+              padding: const EdgeInsets.only(top: 4),
               child: Text(
                 'Faded boxes are low-confidence and not counted in the score.',
                 style: theme.textTheme.bodySmall,
               ),
             ),
           const SizedBox(height: 16),
-          _ScoreCard(
+          ScoreCard(
             title: 'Severity',
             score: a.score,
             level: a.priority,
@@ -65,7 +86,7 @@ class ResultScreen extends StatelessWidget {
           ),
           if (h != null) ...[
             const SizedBox(height: 12),
-            _ScoreCard(
+            ScoreCard(
               title: 'Asset health',
               score: h.score,
               level: h.riskLevel,
@@ -107,89 +128,6 @@ class ResultScreen extends StatelessWidget {
               ),
             ),
         ],
-      ),
-    );
-  }
-}
-
-class _ScoreCard extends StatelessWidget {
-  const _ScoreCard({
-    required this.title,
-    required this.score,
-    required this.level,
-    required this.reasons,
-    this.levelLabel,
-    this.subtitle,
-    this.footnote,
-  });
-
-  final String title;
-  final int score;
-  final String level;
-  final String? levelLabel;
-  final String? subtitle;
-  final String? footnote;
-  final List<String> reasons;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final color = levelColor(level);
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 72,
-                  height: 72,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: color, width: 5),
-                  ),
-                  child: Text(
-                    '$score',
-                    style: theme.textTheme.headlineSmall
-                        ?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title, style: theme.textTheme.labelLarge),
-                      Text(
-                        levelLabel ?? level,
-                        style: theme.textTheme.titleLarge?.copyWith(
-                          color: color,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      if (subtitle != null)
-                        Text(subtitle!, style: theme.textTheme.bodySmall),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const Divider(height: 24),
-            for (final r in reasons)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Text('• $r'),
-              ),
-            if (footnote != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(footnote!, style: theme.textTheme.bodySmall),
-              ),
-          ],
-        ),
       ),
     );
   }

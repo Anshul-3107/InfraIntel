@@ -76,29 +76,50 @@ class AssetHealth {
 class Inspection {
   const Inspection({
     required this.id,
+    required this.imageUrl,
+    required this.latitude,
+    required this.longitude,
+    required this.createdAt,
+    required this.inspector,
     required this.imageWidth,
     required this.imageHeight,
     required this.detections,
     required this.assessment,
     required this.health,
     required this.assetId,
+    required this.assetName,
     required this.assetAutoCreated,
   });
 
   final int id;
+  final String imageUrl;
+  final double latitude;
+  final double longitude;
+  final DateTime createdAt;
+  final String? inspector;
   final int imageWidth;
   final int imageHeight;
   final List<Detection> detections;
   final Assessment assessment;
   final AssetHealth? health;
   final int? assetId;
+  final String assetName;
   final bool assetAutoCreated;
+
+  String get assetLabel => assetId == null
+      ? 'No asset'
+      : (assetName.isNotEmpty ? assetName : 'Asset #$assetId');
 
   factory Inspection.fromJson(Map<String, dynamic> j) {
     final asset = j['infrastructure'] as Map<String, dynamic>?;
     final health = j['asset_health'] as Map<String, dynamic>?;
     return Inspection(
       id: (j['id'] as num).toInt(),
+      imageUrl: j['image'] as String,
+      latitude: (j['latitude'] as num).toDouble(),
+      longitude: (j['longitude'] as num).toDouble(),
+      createdAt: DateTime.parse(j['created_at'] as String),
+      inspector: j['inspector'] as String?,
       imageWidth: (j['image_width'] as num).toInt(),
       imageHeight: (j['image_height'] as num).toInt(),
       detections: (j['detections'] as List)
@@ -108,8 +129,73 @@ class Inspection {
           Assessment.fromJson(j['assessment'] as Map<String, dynamic>),
       health: health == null ? null : AssetHealth.fromJson(health),
       assetId: asset == null ? null : (asset['id'] as num).toInt(),
+      assetName: asset == null ? '' : (asset['name'] as String? ?? ''),
       assetAutoCreated:
           asset == null ? false : (asset['auto_created'] as bool? ?? false),
+    );
+  }
+}
+
+class RecentInspection {
+  const RecentInspection({
+    required this.id,
+    required this.createdAt,
+    required this.severityScore,
+    required this.priority,
+  });
+
+  final int id;
+  final DateTime createdAt;
+  final int severityScore;
+  final String priority;
+
+  factory RecentInspection.fromJson(Map<String, dynamic> j) => RecentInspection(
+        id: (j['id'] as num).toInt(),
+        createdAt: DateTime.parse(j['created_at'] as String),
+        severityScore: (j['severity_score'] as num).toInt(),
+        priority: j['priority'] as String,
+      );
+}
+
+class Asset {
+  const Asset({
+    required this.id,
+    required this.name,
+    required this.assetType,
+    required this.latitude,
+    required this.longitude,
+    required this.constructionYear,
+    required this.autoCreated,
+    required this.health,
+    required this.recent,
+  });
+
+  final int id;
+  final String name;
+  final String assetType;
+  final double latitude;
+  final double longitude;
+  final int? constructionYear;
+  final bool autoCreated;
+  final AssetHealth? health;
+  final List<RecentInspection> recent;
+
+  String get label => name.isNotEmpty ? name : 'Asset #$id';
+
+  factory Asset.fromJson(Map<String, dynamic> j) {
+    final health = j['health'] as Map<String, dynamic>?;
+    return Asset(
+      id: (j['id'] as num).toInt(),
+      name: j['name'] as String? ?? '',
+      assetType: j['asset_type'] as String? ?? 'road',
+      latitude: (j['latitude'] as num).toDouble(),
+      longitude: (j['longitude'] as num).toDouble(),
+      constructionYear: (j['construction_year'] as num?)?.toInt(),
+      autoCreated: j['auto_created'] as bool? ?? false,
+      health: health == null ? null : AssetHealth.fromJson(health),
+      recent: ((j['recent_inspections'] as List?) ?? const [])
+          .map((r) => RecentInspection.fromJson(r as Map<String, dynamic>))
+          .toList(),
     );
   }
 }

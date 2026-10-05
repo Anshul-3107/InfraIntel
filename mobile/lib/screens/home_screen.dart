@@ -25,6 +25,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _locating = false;
   bool _uploading = false;
 
+  /// Discards the chosen photo and its location. Does not touch the
+  /// phone's own gallery, only what this screen is holding.
+  void _clear() {
+    setState(() {
+      _file = null;
+      _position = null;
+      _locationError = null;
+      _locating = false;
+    });
+  }
+
   Future<void> _pick(ImageSource source) async {
     final picked = await _picker.pickImage(
       source: source,
@@ -62,19 +73,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _locate() async {
+    final photoAtStart = _file;
     setState(() {
       _locating = true;
       _locationError = null;
     });
     try {
       final pos = await _currentPosition();
-      if (mounted) setState(() => _position = pos);
+      // Ignore the result if the photo was removed or replaced meanwhile.
+      if (mounted && identical(_file, photoAtStart) && _file != null) {
+        setState(() => _position = pos);
+      }
     } on TimeoutException {
-      if (mounted) {
+      if (mounted && identical(_file, photoAtStart) && _file != null) {
         setState(() => _locationError = 'Could not get a GPS fix in time.');
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && identical(_file, photoAtStart) && _file != null) {
         setState(() =>
             _locationError = e.toString().replaceFirst('Exception: ', ''));
       }
@@ -95,10 +110,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             latitude: pos.latitude,
             longitude: pos.longitude,
           );
+      // Make History and Map pick up the new inspection.
+      ref.invalidate(historyProvider);
+      ref.invalidate(assetsProvider);
       if (!mounted) return;
+      // The photo has been submitted, so reset the screen for the next one.
+      _clear();
       await Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => ResultScreen(imageFile: file, inspection: inspection),
+          builder: (_) => ResultScreen(
+            image: FileImage(file),
+            inspection: inspection,
+          ),
         ),
       );
     } on ApiException catch (e) {
@@ -155,7 +178,25 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         ? const Center(
                             child: Text('Take or choose a photo of the road'),
                           )
-                        : Image.file(_file!, fit: BoxFit.contain),
+                        : Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              Image.file(_file!, fit: BoxFit.contain),
+                              Positioned(
+                                top: 8,
+                                right: 8,
+                                child: IconButton.filled(
+                                  tooltip: 'Remove photo',
+                                  style: IconButton.styleFrom(
+                                    backgroundColor: Colors.black54,
+                                    foregroundColor: Colors.white,
+                                  ),
+                                  icon: const Icon(Icons.close),
+                                  onPressed: _uploading ? null : _clear,
+                                ),
+                              ),
+                            ],
+                          ),
                   ),
                 ),
               ),
