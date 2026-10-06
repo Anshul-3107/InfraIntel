@@ -38,7 +38,10 @@ Future<bool> confirmAndDeleteInspection(
   );
   if (confirmed != true) return false;
 
+  // The screen may have been closed while the dialog was open.
+  if (!context.mounted) return false;
   final messenger = ScaffoldMessenger.of(context);
+
   try {
     await ref.read(apiProvider).deleteInspection(inspection.id);
   } on ApiException catch (e) {

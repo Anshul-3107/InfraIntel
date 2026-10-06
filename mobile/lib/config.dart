@@ -1,9 +1,14 @@
-/// Base URL of the Django API. Override at run time, for example for a real phone:
+/// Base URL of the Django API.
+///
+/// Default is for a real phone over USB, with the port forwarded first:
+///   adb reverse tcp:8000 tcp:8000
+/// For the Android emulator, run with:
+///   flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000/api
+/// For a phone on the same Wi-Fi, use your PC's address:
 ///   flutter run --dart-define=API_BASE_URL=http://192.168.1.20:8000/api
-/// 10.0.2.2 is how the Android emulator reaches your computer's localhost.
 const String kApiBaseUrl = String.fromEnvironment(
   'API_BASE_URL',
-  defaultValue: 'http://10.0.2.2:8000/api',
+  defaultValue: 'http://127.0.0.1:8000/api',
 );
 
 /// Must match MIN_CONFIDENCE in ml/risk/severity.py. Detections below this

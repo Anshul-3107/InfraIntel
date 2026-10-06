@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../api_client.dart';
+import '../place.dart';
 import '../providers.dart';
 import 'result_screen.dart';
 
@@ -25,14 +26,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _locating = false;
   bool _uploading = false;
 
+  PlaceName? _place;
+  bool _placeLoading = false;
+  int _placeRequest = 0; // lets a late lookup be ignored after the photo changes
+
   /// Discards the chosen photo and its location. Does not touch the
   /// phone's own gallery, only what this screen is holding.
   void _clear() {
+    _placeRequest++;
     setState(() {
       _file = null;
       _position = null;
       _locationError = null;
       _locating = false;
+      _place = null;
+      _placeLoading = false;
     });
   }
 
@@ -44,10 +52,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       maxHeight: 1920,
     );
     if (picked == null) return;
+    _placeRequest++;
     setState(() {
       _file = File(picked.path);
       _position = null;
       _locationError = null;
+      _place = null;
+      _placeLoading = false;
     });
     await _locate();
   }
@@ -83,6 +94,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       // Ignore the result if the photo was removed or replaced meanwhile.
       if (mounted && identical(_file, photoAtStart) && _file != null) {
         setState(() => _position = pos);
+        unawaited(_lookupPlace(pos));
       }
     } on TimeoutException {
       if (mounted && identical(_file, photoAtStart) && _file != null) {
@@ -96,6 +108,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     } finally {
       if (mounted) setState(() => _locating = false);
     }
+  }
+
+  Future<void> _lookupPlace(Position pos) async {
+    final request = ++_placeRequest;
+    setState(() {
+      _place = null;
+      _placeLoading = true;
+    });
+    final place = await lookupPlaceName(pos.latitude, pos.longitude);
+    if (!mounted || request != _placeRequest) return;
+    setState(() {
+      _place = place;
+      _placeLoading = false;
+    });
   }
 
   Future<void> _analyze() async {
@@ -204,6 +230,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               _LocationRow(
                 locating: _locating,
                 position: _position,
+                place: _place,
+                placeLoading: _placeLoading,
                 error: _locationError,
                 hasPhoto: _file != null,
                 onRetry: _locate,
@@ -254,6 +282,8 @@ class _LocationRow extends StatelessWidget {
   const _LocationRow({
     required this.locating,
     required this.position,
+    required this.place,
+    required this.placeLoading,
     required this.error,
     required this.hasPhoto,
     required this.onRetry,
@@ -261,6 +291,8 @@ class _LocationRow extends StatelessWidget {
 
   final bool locating;
   final Position? position;
+  final PlaceName? place;
+  final bool placeLoading;
   final String? error;
   final bool hasPhoto;
   final VoidCallback onRetry;
@@ -281,13 +313,37 @@ class _LocationRow extends StatelessWidget {
       );
     }
     if (position != null) {
+      final title = place?.title ??
+          (placeLoading ? 'Finding place name...' : 'Place name unavailable');
+      final coords =
+          '${position!.latitude.toStringAsFixed(5)}, ${position!.longitude.toStringAsFixed(5)}';
       return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.place, size: 18),
+          const Padding(
+            padding: EdgeInsets.only(top: 2),
+            child: Icon(Icons.place, size: 18),
+          ),
           const SizedBox(width: 6),
-          Text(
-              '${position!.latitude.toStringAsFixed(5)}, ${position!.longitude.toStringAsFixed(5)}'),
-          const Spacer(),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w600),
+                ),
+                if (place?.subtitle != null)
+                  Text(place!.subtitle!, style: theme.textTheme.bodySmall),
+                Text(
+                  coords,
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.outline),
+                ),
+              ],
+            ),
+          ),
           TextButton(onPressed: onRetry, child: const Text('Refresh')),
         ],
       );
