@@ -1,0 +1,71 @@
+{% extends "dashboard/base.html" %}
+{% load tz %}
+{% block title %}{{ name }}{% endblock %}
+{% block content %}
+<p><a href="{% url 'dashboard-overview' %}">&larr; All assets</a></p>
+<h1>{{ name }} {% if risk %}<span class="tag {{ risk }}">{{ risk }} risk</span>{% endif %}</h1>
+<p class="muted">
+  {{ asset.get_asset_type_display }} · {{ asset.latitude|stringformat:".5f" }}, {{ asset.longitude|stringformat:".5f" }}
+  {% if asset.construction_year %} · built {{ asset.construction_year }}{% endif %}
+  {% if asset.auto_created %} · registered automatically{% endif %}
+</p>
+
+<div class="grid2">
+  <div>
+    {% if health %}
+    <div class="card">
+      <div class="num">{{ health.health_score }}<span class="muted">/100</span></div>
+      <div class="lbl">Health score · trend: {{ health.trend }} · {{ health.inspections_considered }} inspection(s) considered</div>
+      <ul class="reasons">{% for r in health.reasons %}<li>{{ r }}</li>{% endfor %}</ul>
+    </div>
+    {% else %}
+    <div class="card">No inspections for this asset yet.</div>
+    {% endif %}
+
+    {% if history %}
+    <h2>Severity history <span class="muted">(oldest to newest, higher is worse)</span></h2>
+    <div class="bars">
+      {% for h in history %}
+      <a class="bar-wrap" href="{% url 'dashboard-inspection' h.inspection.pk %}"
+         title="{{ h.inspection.created_at|timezone:tz|date:'j M, g:i a' }} · severity {{ h.score }}">
+        <div class="bar" style="height:{{ h.score }}%;background:{{ h.color }}"></div>
+      </a>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2 style="margin-top:0">Asset details</h2>
+    <form method="post" class="stack">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <label for="{{ form.name.id_for_label }}">Name</label>
+      {{ form.name }}{{ form.name.errors }}
+      <label for="{{ form.asset_type.id_for_label }}">Type</label>
+      {{ form.asset_type }}{{ form.asset_type.errors }}
+      <label for="{{ form.construction_year.id_for_label }}">Construction year (feeds the health score)</label>
+      {{ form.construction_year }}{{ form.construction_year.errors }}
+      <p><button class="btn" type="submit">Save</button></p>
+    </form>
+  </div>
+</div>
+
+<h2>Inspections ({{ items|length }}{% if items|length == 50 %}, newest 50{% endif %})</h2>
+{% if items %}
+<table>
+  <thead><tr><th>Photo</th><th>When</th><th>Severity</th><th>Detections</th><th>Inspector</th></tr></thead>
+  <tbody>
+  {% for i in items %}
+    <tr>
+      <td><a href="{% url 'dashboard-inspection' i.inspection.pk %}"><img class="thumb" src="{{ i.inspection.image.url }}" alt=""></a></td>
+      <td><a href="{% url 'dashboard-inspection' i.inspection.pk %}">{{ i.inspection.created_at|timezone:tz|date:"j M Y, g:i a" }}</a></td>
+      <td><span class="tag {{ i.priority }}">{{ i.priority }}</span> {{ i.score }}/100</td>
+      <td>{{ i.detections }}</td>
+      <td>{{ i.inspection.inspector.username|default:"—" }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

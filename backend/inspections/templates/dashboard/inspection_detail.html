@@ -1,0 +1,63 @@
+{% extends "dashboard/base.html" %}
+{% load tz %}
+{% block title %}Inspection #{{ inspection.pk }}{% endblock %}
+{% block content %}
+<p>
+  {% if asset %}<a href="{% url 'dashboard-asset' asset.pk %}">&larr; {{ asset_name }}</a>
+  {% else %}<a href="{% url 'dashboard-overview' %}">&larr; Overview</a>{% endif %}
+</p>
+<h1>Inspection #{{ inspection.pk }}</h1>
+<p class="muted">
+  {{ inspection.created_at|timezone:tz|date:"j M Y, g:i a" }} · {{ asset_name }}
+  · {{ inspection.latitude|stringformat:".5f" }}, {{ inspection.longitude|stringformat:".5f" }}
+  · inspector: {{ inspection.inspector.username|default:"unknown" }}
+</p>
+
+<div class="grid2">
+  <div>
+    <div class="photo">
+      <img src="{{ inspection.image.url }}" alt="Inspection photo">
+      {% for b in boxes %}
+      <div class="box {% if not b.counted %}faded{% endif %}"
+           style="left:{{ b.left|stringformat:'.2f' }}%;top:{{ b.top|stringformat:'.2f' }}%;width:{{ b.width|stringformat:'.2f' }}%;height:{{ b.height|stringformat:'.2f' }}%;border-color:{{ b.color }}">
+        {% if b.counted %}<span style="background:{{ b.color }}">{{ b.label }} {{ b.confidence_pct }}%</span>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% if has_faded %}<p class="muted">Faded boxes are below {{ min_confidence_pct }}% confidence and are not counted in the score.</p>{% endif %}
+
+    <h2>Detections ({{ boxes|length }})</h2>
+    {% if boxes %}
+    <table>
+      <thead><tr><th>Type</th><th>Confidence</th><th>Counted in score</th></tr></thead>
+      <tbody>
+      {% for b in boxes %}
+        <tr><td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:{{ b.color }}"></span> {{ b.label }}</td><td>{{ b.confidence_pct }}%</td><td>{% if b.counted %}yes{% else %}no{% endif %}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}<div class="card">No damage detected.</div>{% endif %}
+  </div>
+
+  <div>
+    <div class="card">
+      <div class="lbl">Severity</div>
+      <div class="num">{{ assessment.severity_score }}<span class="muted">/100</span> <span class="tag {{ assessment.priority }}">{{ assessment.priority }}</span></div>
+      <ul class="reasons">{% for r in assessment.reasons %}<li>{{ r }}</li>{% endfor %}</ul>
+    </div>
+    {% if health %}
+    <div class="card" style="margin-top:12px">
+      <div class="lbl">Asset health (all inspections)</div>
+      <div class="num">{{ health.health_score }}<span class="muted">/100</span> <span class="tag {{ health.risk_level }}">{{ health.risk_level }}</span></div>
+      <div class="muted">Trend: {{ health.trend }}</div>
+      <ul class="reasons">{% for r in health.reasons %}<li>{{ r }}</li>{% endfor %}</ul>
+    </div>
+    {% endif %}
+    <form method="post" action="{% url 'dashboard-inspection-delete' inspection.pk %}" style="margin-top:16px"
+          onsubmit="return confirm('Delete this inspection and its photo? This cannot be undone.');">
+      {% csrf_token %}
+      <button class="btn danger" type="submit">Delete inspection</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

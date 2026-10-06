@@ -1,0 +1,90 @@
+{% extends "dashboard/base.html" %}
+{% load tz %}
+{% block title %}Overview{% endblock %}
+{% block head %}
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+{% endblock %}
+{% block content %}
+<h1>Infrastructure overview</h1>
+<p class="muted">Assets ranked worst-first by health score. Times shown in India time.</p>
+
+<div class="cards">
+  <div class="card"><div class="num">{{ total_assets }}</div><div class="lbl">Assets</div></div>
+  {% for c in counts %}
+  <div class="card" style="border-left:6px solid {{ c.color }}"><div class="num">{{ c.n }}</div><div class="lbl">{{ c.level }} risk</div></div>
+  {% endfor %}
+  <div class="card"><div class="num">{{ week_inspections }}</div><div class="lbl">Inspections, last 7 days</div></div>
+  <div class="card"><div class="num">{{ total_inspections }}</div><div class="lbl">Inspections, total</div></div>
+</div>
+
+<div class="chips">
+  <a class="chip {% if not risk %}on{% endif %}" href="{% url 'dashboard-overview' %}">All</a>
+  {% for l in levels %}<a class="chip {% if risk == l %}on{% endif %}" href="?risk={{ l }}">{{ l }}</a>{% endfor %}
+  <a class="btn" href="{% url 'dashboard-export-assets' %}{% if risk %}?risk={{ risk }}{% endif %}">Export CSV</a>
+</div>
+
+<div id="map"></div>
+{{ map_points|json_script:"map-data" }}
+
+<h2>Priority list{% if risk %} · {{ risk }} only{% endif %}</h2>
+{% if rows %}
+<table>
+  <thead>
+    <tr><th>#</th><th>Asset</th><th>Risk</th><th>Health</th><th>Trend</th><th>Latest finding</th><th>Inspections</th><th>Last inspected</th></tr>
+  </thead>
+  <tbody>
+  {% for row in rows %}
+    <tr>
+      <td>{{ forloop.counter }}</td>
+      <td><a href="{{ row.url }}">{{ row.name }}</a></td>
+      <td>{% if row.risk %}<span class="tag {{ row.risk }}">{{ row.risk }}</span>{% else %}<span class="tag NONE">NO DATA</span>{% endif %}</td>
+      <td>{% if row.score is not None %}{{ row.score }}/100{% else %}&mdash;{% endif %}</td>
+      <td>{{ row.trend|default:"—" }}</td>
+      <td>{% if row.latest_finding %}{{ row.latest_finding }} <span class="muted">(severity {{ row.latest_severity }})</span>{% else %}&mdash;{% endif %}</td>
+      <td>{{ row.inspection_count }}</td>
+      <td>{% if row.last_inspected %}{{ row.last_inspected|timezone:tz|date:"j M Y, g:i a" }}{% else %}&mdash;{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="card">No assets{% if risk %} at {{ risk }} risk{% endif %} yet. Assets appear after the first inspection is uploaded from the app.</div>
+{% endif %}
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+(function () {
+  var points = JSON.parse(document.getElementById("map-data").textContent);
+  var map = L.map("map");
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: "&copy; OpenStreetMap contributors"
+  }).addTo(map);
+  if (!points.length) { map.setView([22.5, 79], 5); return; }
+  var bounds = [];
+  points.forEach(function (p) {
+    var ll = [p.lat, p.lon];
+    bounds.push(ll);
+    var marker = L.circleMarker(ll, {
+      radius: 10, color: "#ffffff", weight: 2, fillColor: p.color, fillOpacity: 0.95
+    }).addTo(map);
+    // Built with textContent so a name typed into the admin can never inject HTML.
+    var box = document.createElement("div");
+    var title = document.createElement("strong");
+    title.textContent = p.name;
+    box.appendChild(title);
+    box.appendChild(document.createElement("br"));
+    var line = document.createElement("span");
+    line.textContent = p.summary;
+    box.appendChild(line);
+    box.appendChild(document.createElement("br"));
+    var link = document.createElement("a");
+    link.href = p.url;
+    link.textContent = "Open asset";
+    box.appendChild(link);
+    marker.bindPopup(box);
+  });
+  map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+})();
+</script>
+{% endblock %}

@@ -3,7 +3,6 @@ import tempfile
 from pathlib import Path
 
 from django.conf import settings
-from django.db import transaction
 from rest_framework import status
 from rest_framework.generics import (
     ListAPIView,
@@ -25,6 +24,7 @@ from .serializers import (
     InspectionRequestSerializer,
     InspectionSerializer,
 )
+from .services import delete_inspection
 
 logger = logging.getLogger(__name__)
 
@@ -123,26 +123,7 @@ class InspectionDetailView(RetrieveDestroyAPIView):
         return visible_inspections(self.request.user)
 
     def perform_destroy(self, instance):
-        asset = instance.infrastructure
-        image = instance.image
-
-        with transaction.atomic():
-            instance.delete()
-            # An asset that was created automatically and has no inspections
-            # left would only be an empty pin on the map, so remove it.
-            # Assets someone named or curated are always kept.
-            if (
-                asset is not None
-                and asset.auto_created
-                and not asset.inspections.exists()
-            ):
-                asset.delete()
-
-        # Remove the stored photo. A failure here must not undo the delete.
-        try:
-            image.delete(save=False)
-        except Exception:
-            logger.exception("Could not remove image file for deleted inspection")
+        delete_inspection(instance)
 
 
 class InspectionListView(ListAPIView):

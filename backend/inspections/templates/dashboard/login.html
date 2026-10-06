@@ -1,0 +1,18 @@
+{% extends "dashboard/base.html" %}
+{% block title %}Sign in{% endblock %}
+{% block content %}
+<div class="login card">
+  <h1>Dashboard sign-in</h1>
+  <p class="muted">Staff accounts only.</p>
+  <form method="post" class="stack">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    <label for="{{ form.username.id_for_label }}">Username</label>
+    {{ form.username }}
+    <label for="{{ form.password.id_for_label }}">Password</label>
+    {{ form.password }}
+    <input type="hidden" name="next" value="{{ next }}">
+    <p><button class="btn" type="submit">Sign in</button></p>
+  </form>
+</div>
+{% endblock %}

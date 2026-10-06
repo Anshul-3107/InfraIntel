@@ -1,0 +1,73 @@
+{% load tz %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Dashboard{% endblock %} · InfraIntel</title>
+  <style>
+    :root { --bg:#f4f6f8; --card:#fff; --text:#1d2733; --muted:#5f6b7a; --line:#dfe4ea; --brand:#1b5e8c; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background:var(--bg); color:var(--text); }
+    a { color: var(--brand); }
+    .topbar { display:flex; align-items:center; justify-content:space-between; padding:12px 24px; background:var(--brand); color:#fff; }
+    .topbar a { color:#fff; text-decoration:none; }
+    .brand { font-weight:700; font-size:1.15rem; }
+    .topbar form { display:inline; margin-left:12px; }
+    .topbar button { background:transparent; color:#fff; border:1px solid rgba(255,255,255,.6); border-radius:6px; padding:5px 12px; cursor:pointer; }
+    main { max-width:1200px; margin:0 auto; padding:20px 24px 48px; }
+    h1 { margin:8px 0 4px; font-size:1.6rem; }
+    h2 { margin:24px 0 10px; font-size:1.15rem; }
+    .muted { color:var(--muted); font-size:.9rem; }
+    .cards { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:12px; margin:16px 0 20px; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
+    .card .num { font-size:1.9rem; font-weight:700; }
+    .card .lbl { color:var(--muted); font-size:.85rem; }
+    table { width:100%; border-collapse:collapse; background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+    th, td { padding:10px 12px; text-align:left; border-bottom:1px solid var(--line); vertical-align:top; font-size:.92rem; }
+    th { background:#eef2f6; font-size:.78rem; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); }
+    tr:last-child td { border-bottom:0; }
+    .tag { display:inline-block; padding:2px 9px; border-radius:6px; color:#fff; font-size:.78rem; font-weight:700; vertical-align:middle; }
+    .tag.LOW { background:#2e7d32; } .tag.MEDIUM { background:#f9a825; color:#1d2733; }
+    .tag.HIGH { background:#ef6c00; } .tag.CRITICAL { background:#c62828; } .tag.NONE { background:#9e9e9e; }
+    .chips { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:14px 0; }
+    .chip { padding:5px 12px; border-radius:16px; border:1px solid var(--line); background:var(--card); text-decoration:none; font-size:.88rem; color:var(--text); }
+    .chip.on { background:var(--brand); color:#fff; border-color:var(--brand); }
+    .btn { display:inline-block; padding:7px 14px; border-radius:6px; background:var(--brand); color:#fff; text-decoration:none; border:0; cursor:pointer; font-size:.9rem; }
+    .btn.danger { background:#c62828; }
+    .chips .btn { margin-left:auto; }
+    #map { height:420px; border-radius:10px; border:1px solid var(--line); }
+    .grid2 { display:grid; grid-template-columns:2fr 1fr; gap:20px; }
+    @media (max-width:860px) { .grid2 { grid-template-columns:1fr; } }
+    ul.reasons { margin:8px 0 0; padding-left:20px; }
+    .msg { padding:10px 24px; background:#e8f5e9; border-bottom:1px solid #c8e6c9; }
+    .msg.error { background:#ffebee; border-color:#ffcdd2; }
+    .errorlist { color:#c62828; margin:4px 0; padding-left:18px; font-size:.85rem; }
+    form.stack label { display:block; margin:10px 0 3px; font-size:.85rem; color:var(--muted); }
+    form.stack input[type=text], form.stack input[type=number], form.stack input[type=password], form.stack select { width:100%; padding:8px; border:1px solid var(--line); border-radius:6px; font-size:.95rem; }
+    .bars { display:flex; align-items:flex-end; gap:4px; height:110px; padding:6px; background:var(--card); border:1px solid var(--line); border-radius:10px; }
+    .bar-wrap { flex:1; height:100%; display:flex; align-items:flex-end; max-width:34px; }
+    .bar { width:100%; min-height:3px; border-radius:3px 3px 0 0; }
+    .photo { position:relative; max-width:760px; border-radius:10px; overflow:hidden; background:#000; }
+    .photo img { display:block; width:100%; height:auto; }
+    .photo .box { position:absolute; border:2px solid; }
+    .photo .box.faded { opacity:.45; border-width:1px; }
+    .photo .box span { position:absolute; left:-2px; top:-20px; font-size:11px; font-weight:700; color:#000; padding:1px 5px; white-space:nowrap; }
+    .thumb { width:64px; height:64px; object-fit:cover; border-radius:6px; display:block; }
+    .login { max-width:380px; margin:60px auto; }
+  </style>
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="{% url 'dashboard-overview' %}">InfraIntel</a>
+    {% if user.is_authenticated %}
+    <div>
+      <span>{{ user.username }}</span>
+      <form method="post" action="{% url 'dashboard-logout' %}">{% csrf_token %}<button type="submit">Sign out</button></form>
+    </div>
+    {% endif %}
+  </header>
+  {% for m in messages %}<div class="msg {{ m.tags }}">{{ m }}</div>{% endfor %}
+  <main>{% block content %}{% endblock %}</main>
+</body>
+</html>
