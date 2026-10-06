@@ -58,6 +58,9 @@
   var map = L.map("map");
   L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
+    // OpenStreetMap blocks tile requests that carry no Referer. Django's default
+    // Referrer-Policy (same-origin) strips it, so allow it for the map images only.
+    referrerPolicy: "strict-origin-when-cross-origin",
     attribution: "&copy; OpenStreetMap contributors"
   }).addTo(map);
   if (!points.length) { map.setView([22.5, 79], 5); return; }
