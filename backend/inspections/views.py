@@ -65,6 +65,7 @@ class InspectView(APIView):
         data = request_serializer.validated_data
         image = data["image"]
         lat, lon = data["latitude"], data["longitude"]
+        location_name = data.get("location_name", "")
 
         suffix = Path(image.name).suffix.lower() or ".jpg"
         try:
@@ -90,8 +91,17 @@ class InspectView(APIView):
             )
             if asset is None:
                 asset = Infrastructure.objects.create(
-                    latitude=lat, longitude=lon, auto_created=True
+                    latitude=lat,
+                    longitude=lon,
+                    auto_created=True,
+                    location_name=location_name,
                 )
+
+        # An asset that has no place name yet takes the first one reported.
+        # A name that is already there is never overwritten.
+        if location_name and not asset.location_name:
+            asset.location_name = location_name
+            asset.save(update_fields=["location_name"])
 
         inspection = Inspection.objects.create(
             inspector=request.user,
@@ -99,6 +109,7 @@ class InspectView(APIView):
             image=image,
             latitude=lat,
             longitude=lon,
+            location_name=location_name,
             image_width=result["image_size"]["width"],
             image_height=result["image_size"]["height"],
             detections=result["detections"],

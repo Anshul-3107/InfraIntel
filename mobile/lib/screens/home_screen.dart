@@ -28,6 +28,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   PlaceName? _place;
   bool _placeLoading = false;
+  Future<PlaceName?>? _placeLookup; // lets Analyze wait for a running lookup
   int _placeRequest = 0; // lets a late lookup be ignored after the photo changes
 
   /// Discards the chosen photo and its location. Does not touch the
@@ -41,6 +42,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       _locating = false;
       _place = null;
       _placeLoading = false;
+      _placeLookup = null;
     });
   }
 
@@ -59,6 +61,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       _locationError = null;
       _place = null;
       _placeLoading = false;
+      _placeLookup = null;
     });
     await _locate();
   }
@@ -112,11 +115,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Future<void> _lookupPlace(Position pos) async {
     final request = ++_placeRequest;
+    final lookup = lookupPlaceName(pos.latitude, pos.longitude);
     setState(() {
       _place = null;
       _placeLoading = true;
+      _placeLookup = lookup;
     });
-    final place = await lookupPlaceName(pos.latitude, pos.longitude);
+    final place = await lookup;
     if (!mounted || request != _placeRequest) return;
     setState(() {
       _place = place;
@@ -131,10 +136,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     setState(() => _uploading = true);
     try {
+      // If the place lookup is still running, give it a moment to finish
+      // (it has its own 8 second limit) so the name is saved with the photo.
+      final running = _placeLookup;
+      final place = _place ?? (running == null ? null : await running);
+
       final inspection = await ref.read(apiProvider).uploadInspection(
             imagePath: file.path,
             latitude: pos.latitude,
             longitude: pos.longitude,
+            locationName: place?.fullText,
           );
       // Make History and Map pick up the new inspection.
       ref.invalidate(historyProvider);

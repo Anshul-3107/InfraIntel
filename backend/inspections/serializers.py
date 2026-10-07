@@ -12,6 +12,10 @@ class InspectionRequestSerializer(serializers.Serializer):
     latitude = serializers.FloatField(min_value=-90, max_value=90)
     longitude = serializers.FloatField(min_value=-180, max_value=180)
     infrastructure_id = serializers.IntegerField(required=False)
+    # Optional. Whitespace is trimmed, so "   " becomes an empty name.
+    location_name = serializers.CharField(
+        required=False, allow_blank=True, max_length=255
+    )
 
     def validate_image(self, image):
         if image.size > settings.MAX_UPLOAD_BYTES:
@@ -40,6 +44,7 @@ class InspectionSerializer(serializers.ModelSerializer):
             "image",
             "latitude",
             "longitude",
+            "location_name",
             "image_width",
             "image_height",
             "num_detections",
@@ -65,7 +70,12 @@ class InspectionSerializer(serializers.ModelSerializer):
         asset = inspection.infrastructure
         if asset is None:
             return None
-        return {"id": asset.id, "name": asset.name, "auto_created": asset.auto_created}
+        return {
+            "id": asset.id,
+            "name": asset.name,
+            "location_name": asset.location_name,
+            "auto_created": asset.auto_created,
+        }
 
     def get_asset_health(self, inspection):
         if inspection.infrastructure is None:
@@ -82,6 +92,7 @@ class InfrastructureSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "name",
+            "location_name",
             "asset_type",
             "latitude",
             "longitude",

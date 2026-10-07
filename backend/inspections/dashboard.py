@@ -77,7 +77,8 @@ class DashboardLogoutView(LogoutView):
 
 
 def _display_name(asset):
-    return asset.name or f"Asset #{asset.pk}"
+    # Name set by staff, else the place name from the phone, else "Asset #id".
+    return asset.display_name
 
 
 def _risk_param(request):

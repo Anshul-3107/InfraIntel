@@ -79,6 +79,7 @@ class Inspection {
     required this.imageUrl,
     required this.latitude,
     required this.longitude,
+    required this.locationName,
     required this.createdAt,
     required this.inspector,
     required this.imageWidth,
@@ -88,6 +89,7 @@ class Inspection {
     required this.health,
     required this.assetId,
     required this.assetName,
+    required this.assetLocation,
     required this.assetAutoCreated,
   });
 
@@ -95,6 +97,9 @@ class Inspection {
   final String imageUrl;
   final double latitude;
   final double longitude;
+
+  /// Where this photo was taken, as reported by the phone. May be empty.
+  final String locationName;
   final DateTime createdAt;
   final String? inspector;
   final int imageWidth;
@@ -103,12 +108,21 @@ class Inspection {
   final Assessment assessment;
   final AssetHealth? health;
   final int? assetId;
+
+  /// Name set by staff in the dashboard. May be empty.
   final String assetName;
+
+  /// Place name recorded when the asset was first inspected. May be empty.
+  final String assetLocation;
   final bool assetAutoCreated;
 
-  String get assetLabel => assetId == null
-      ? 'No asset'
-      : (assetName.isNotEmpty ? assetName : 'Asset #$assetId');
+  /// Staff name, else the asset's place name, else "Asset #id".
+  String get assetLabel {
+    if (assetId == null) return 'No asset';
+    if (assetName.isNotEmpty) return assetName;
+    if (assetLocation.isNotEmpty) return assetLocation;
+    return 'Asset #$assetId';
+  }
 
   factory Inspection.fromJson(Map<String, dynamic> j) {
     final asset = j['infrastructure'] as Map<String, dynamic>?;
@@ -118,6 +132,7 @@ class Inspection {
       imageUrl: j['image'] as String,
       latitude: (j['latitude'] as num).toDouble(),
       longitude: (j['longitude'] as num).toDouble(),
+      locationName: j['location_name'] as String? ?? '',
       createdAt: DateTime.parse(j['created_at'] as String),
       inspector: j['inspector'] as String?,
       imageWidth: (j['image_width'] as num).toInt(),
@@ -130,6 +145,8 @@ class Inspection {
       health: health == null ? null : AssetHealth.fromJson(health),
       assetId: asset == null ? null : (asset['id'] as num).toInt(),
       assetName: asset == null ? '' : (asset['name'] as String? ?? ''),
+      assetLocation:
+          asset == null ? '' : (asset['location_name'] as String? ?? ''),
       assetAutoCreated:
           asset == null ? false : (asset['auto_created'] as bool? ?? false),
     );
@@ -161,6 +178,7 @@ class Asset {
   const Asset({
     required this.id,
     required this.name,
+    required this.locationName,
     required this.assetType,
     required this.latitude,
     required this.longitude,
@@ -171,7 +189,12 @@ class Asset {
   });
 
   final int id;
+
+  /// Name set by staff in the dashboard. May be empty.
   final String name;
+
+  /// Place name recorded when the asset was first inspected. May be empty.
+  final String locationName;
   final String assetType;
   final double latitude;
   final double longitude;
@@ -180,13 +203,19 @@ class Asset {
   final AssetHealth? health;
   final List<RecentInspection> recent;
 
-  String get label => name.isNotEmpty ? name : 'Asset #$id';
+  /// Staff name, else the place name, else "Asset #id".
+  String get label {
+    if (name.isNotEmpty) return name;
+    if (locationName.isNotEmpty) return locationName;
+    return 'Asset #$id';
+  }
 
   factory Asset.fromJson(Map<String, dynamic> j) {
     final health = j['health'] as Map<String, dynamic>?;
     return Asset(
       id: (j['id'] as num).toInt(),
       name: j['name'] as String? ?? '',
+      locationName: j['location_name'] as String? ?? '',
       assetType: j['asset_type'] as String? ?? 'road',
       latitude: (j['latitude'] as num).toDouble(),
       longitude: (j['longitude'] as num).toDouble(),

@@ -8,7 +8,10 @@ class Infrastructure(models.Model):
         BRIDGE = "bridge", "Bridge"
         OTHER = "other", "Other"
 
+    # Set by staff in the dashboard; always wins over location_name.
     name = models.CharField(max_length=200, blank=True)
+    # Place name from the phone's geocoder at the first inspection.
+    location_name = models.CharField(max_length=255, blank=True, default="")
     asset_type = models.CharField(
         max_length=20, choices=AssetType.choices, default=AssetType.ROAD
     )
@@ -21,9 +24,12 @@ class Infrastructure(models.Model):
     class Meta:
         ordering = ["-created_at"]
 
+    @property
+    def display_name(self):
+        return self.name or self.location_name or f"Asset #{self.pk}"
+
     def __str__(self):
-        label = self.name or f"Asset {self.pk}"
-        return f"{label} ({self.latitude:.5f}, {self.longitude:.5f})"
+        return f"{self.display_name} ({self.latitude:.5f}, {self.longitude:.5f})"
 
 
 class Inspection(models.Model):
@@ -44,6 +50,8 @@ class Inspection(models.Model):
     image = models.ImageField(upload_to="inspections/%Y/%m/")
     latitude = models.FloatField()
     longitude = models.FloatField()
+    # Where this photo was taken, as reported by the app. May be empty.
+    location_name = models.CharField(max_length=255, blank=True, default="")
     image_width = models.PositiveIntegerField()
     image_height = models.PositiveIntegerField()
     detections = models.JSONField(default=list)

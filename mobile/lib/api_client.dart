@@ -117,17 +117,22 @@ class ApiClient {
     return res.data['username'] as String;
   }
 
+  /// [locationName] is the place name shown on the capture screen. It is
+  /// optional: when it is null or blank, nothing is sent.
   Future<Inspection> uploadInspection({
     required String imagePath,
     required double latitude,
     required double longitude,
+    String? locationName,
   }) async {
     final filename = imagePath.split(RegExp(r'[\\/]')).last;
+    final name = locationName?.trim();
     final res = await _authed((o) async {
       // FormData can only be sent once, so it is rebuilt for each attempt.
       final form = FormData.fromMap({
         'latitude': latitude,
         'longitude': longitude,
+        if (name != null && name.isNotEmpty) 'location_name': name,
         'image': await MultipartFile.fromFile(imagePath, filename: filename),
       });
       return _dio.post('/inspect/', data: form, options: o);

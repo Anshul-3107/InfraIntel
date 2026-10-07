@@ -11,6 +11,14 @@ class PlaceName {
 
   /// For example "Jahangirabad, Bhopal, Madhya Pradesh".
   final String? subtitle;
+
+  /// One line to store on the server, for example
+  /// "Near Bhopal Junction, Hamidia Road, Jahangirabad, Bhopal".
+  /// Kept under 200 characters (the server allows 255).
+  String get fullText {
+    final text = subtitle == null ? title : '$title, $subtitle';
+    return text.length <= 200 ? text : '${text.substring(0, 197)}...';
+  }
 }
 
 // geocoding 5.x keeps its functions on a Geocoding instance.
