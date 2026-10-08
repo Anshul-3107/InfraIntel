@@ -1,0 +1,17 @@
+**/venv/
+**/.venv/
+.git/
+.idea/
+.pytest_cache/
+**/__pycache__/
+*.pyc
+.env
+mobile/
+weights/
+yolov8n.pt
+ml/datasets/
+ml/models/
+backend/db.sqlite3
+backend/data_backup.json
+backend/media/
+backend/staticfiles/

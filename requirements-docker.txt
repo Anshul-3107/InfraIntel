@@ -1,0 +1,10 @@
+Django>=5.2,<5.3
+djangorestframework
+djangorestframework-simplejwt
+psycopg[binary]
+Pillow
+numpy
+ultralytics
+opencv-python-headless
+gunicorn
+whitenoise

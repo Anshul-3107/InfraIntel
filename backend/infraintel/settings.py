@@ -10,14 +10,23 @@ PROJECT_ROOT = BASE_DIR.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-# Set DJANGO_SECRET_KEY in your environment for anything beyond local dev
-SECRET_KEY = os.getenv(
-    "DJANGO_SECRET_KEY", "dev-only-insecure-key-change-before-deploying"
-)
+
+def env_list(name, default=""):
+    return [v.strip() for v in os.getenv(name, default).split(",") if v.strip()]
+
+
 DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
 
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "")
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = "dev-only-insecure-key-change-before-deploying"
+    else:
+        raise RuntimeError("DJANGO_SECRET_KEY must be set when DEBUG is off.")
+
 # 10.0.2.2 is how the Android emulator reaches your computer's localhost
-ALLOWED_HOSTS = ["localhost", "127.0.0.1", "10.0.2.2"]
+ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,10.0.2.2")
+CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -32,6 +41,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -94,7 +104,27 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# --- Production hardening (only when DEBUG is off) ---
+if not DEBUG:
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    # Serve over HTTPS only: set DJANGO_HTTPS=1 once a TLS proxy is in front.
+    if os.getenv("DJANGO_HTTPS", "0") == "1":
+        SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+        SECURE_SSL_REDIRECT = True
+        SESSION_COOKIE_SECURE = True
+        CSRF_COOKIE_SECURE = True
+        SECURE_HSTS_SECONDS = 3600  # raise this once everything works
+
+# --- Logging: send everything to the console so `docker compose logs` shows it ---
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {"console": {"class": "logging.StreamHandler"}},
+    "root": {"handlers": ["console"], "level": "INFO"},
+}
 
 # --- InfraIntel ---
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB cap on inspection images

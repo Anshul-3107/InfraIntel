@@ -1,32 +1,31 @@
-# Python environment
+# Python
 venv/
 __pycache__/
 *.pyc
 
-# Datasets (too large; document download instructions in README instead)
-ml/datasets/
-
-# Trained model runs and weights
-ml/models/
-weights/
-*.pt
-*.pth
-
-# Scratch outputs
-ml/scripts/label_check_*/
-ml/inference/*.jpg
-
-# Ultralytics caches / runs
-*.cache
-runs/
-
-# Secrets (for later, Django / API keys)
+# Secrets and local config
 .env
 
-# OS / editor
-.DS_Store
-Thumbs.db
-.vscode/
+# Django
 backend/db.sqlite3
 backend/media/
+backend/staticfiles/
+
+# ML: datasets and weights stay out of git
+ml/datasets/
+ml/models/
+*.pt
+weights/
+yolov8n.pt
+ml/inference/*.jpg
+
+# Flutter / Android build output
+mobile/build/
+mobile/.dart_tool/
+mobile/android/.gradle/
+mobile/android/local.properties
+
+# Editor
+.vscode/
+.idea/
 backend/data_backup.json
