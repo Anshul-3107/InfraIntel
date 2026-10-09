@@ -4,6 +4,7 @@ from rest_framework import serializers
 from ml.risk.severity import assess
 
 from .health_service import asset_health
+from .media_access import signed_media_url
 from .models import Infrastructure, Inspection
 
 
@@ -30,6 +31,7 @@ class InspectionRequestSerializer(serializers.Serializer):
 
 
 class InspectionSerializer(serializers.ModelSerializer):
+    image = serializers.SerializerMethodField()
     num_detections = serializers.SerializerMethodField()
     assessment = serializers.SerializerMethodField()
     inspector = serializers.SerializerMethodField()
@@ -54,6 +56,14 @@ class InspectionSerializer(serializers.ModelSerializer):
             "detections",
             "created_at",
         ]
+
+    def get_image(self, inspection):
+        """Signed link that expires (see MEDIA_LINK_SECONDS)."""
+        if not inspection.image:
+            return None
+        url = signed_media_url(inspection.image.name)
+        request = self.context.get("request")
+        return request.build_absolute_uri(url) if request else url
 
     def get_num_detections(self, inspection):
         return len(inspection.detections)
