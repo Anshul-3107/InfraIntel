@@ -110,7 +110,15 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # --- Production hardening (only when DEBUG is off) ---
 if not DEBUG:
     SECURE_CONTENT_TYPE_NOSNIFF = True
-    # Serve over HTTPS only: set DJANGO_HTTPS=1 once a TLS proxy is in front.
+
+    # Behind a tunnel or proxy that terminates HTTPS (Cloudflare Tunnel, Caddy):
+    # trust its X-Forwarded-Proto header so Django builds https:// links.
+    # Only enable this when the container is reachable ONLY through that proxy.
+    if os.getenv("DJANGO_BEHIND_PROXY", "0") == "1":
+        SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+    # Full HTTPS enforcement: set DJANGO_HTTPS=1 once a TLS proxy is in front
+    # and you no longer need plain-HTTP access (this redirects http to https).
     if os.getenv("DJANGO_HTTPS", "0") == "1":
         SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
         SECURE_SSL_REDIRECT = True
